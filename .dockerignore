@@ -1,0 +1,32 @@
+# Build artifacts (except our jar file)
+target/
+*.war
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+
+# Gradle wrapper cache (but keep gradle wrapper itself)
+.gradle/
+
+# Source code (not needed since we're using pre-built jar)
+src/ 

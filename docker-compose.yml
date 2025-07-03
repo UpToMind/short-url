@@ -1,0 +1,54 @@
+# Docker Compose를 사용하여 여러 컨테이너를 함께 관리
+services:
+  # H2 Database Container - 데이터베이스 역할
+  h2-db:
+    # Docker Hub에서 가져올 H2 데이터베이스 이미지 (미리 빌드된 이미지)
+    image: buildo/h2database:latest
+    # 컨테이너에 고유한 이름 부여 (다른 컨테이너가 이 이름으로 접근 가능)
+    container_name: short-url-h2-db
+    # 호스트 포트:컨테이너 포트 매핑
+    ports:
+      - "8082:8082"  # H2 웹 콘솔 접근용 (브라우저에서 localhost:8082로 접속)
+      - "9092:9092"  # H2 TCP 서버 포트 (Spring Boot가 데이터베이스에 연결할 때 사용)
+    # 컨테이너 내부에서 사용할 환경변수 설정
+    environment:
+      # H2 데이터베이스 실행 옵션: 웹콘솔 활성화, 외부접속 허용, TCP 서버 활성화
+      - H2_OPTIONS=-web -webAllowOthers -tcp -tcpAllowOthers
+    # 데이터 영속성을 위한 볼륨 마운트 (컨테이너가 삭제되어도 데이터 보존)
+    volumes:
+      - h2-data:/opt/h2-data  # Docker 볼륨:컨테이너 내부 경로
+    # 컨테이너가 속할 네트워크 (다른 컨테이너와 통신하기 위함)
+    networks:
+      - short-url-network
+    # 컨테이너 재시작 정책 (Docker 데몬 재시작 시 자동으로 컨테이너도 재시작)
+    restart: unless-stopped
+
+  # Spring Boot Application - 웹 애플리케이션 역할
+  short-url-app:
+    # 현재 디렉토리의 Dockerfile을 사용하여 이미지 빌드
+    build: .
+    # 애플리케이션 컨테이너 이름
+    container_name: short-url-app
+    # Spring Boot 애플리케이션 포트 매핑 (웹 서버 접근용)
+    ports:
+      - "8080:8080"  # localhost:8080으로 애플리케이션 접속 가능
+    # Spring Boot 프로필 설정 (Docker 환경용 설정 파일 사용)
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker  # application-docker.properties 사용
+    # 컨테이너 시작 순서 제어 (h2-db가 먼저 시작된 후 이 컨테이너 시작)
+    depends_on:
+      - h2-db
+    # 데이터베이스와 통신하기 위해 같은 네트워크에 속함
+    networks:
+      - short-url-network
+    # 장애 시 자동 재시작 설정
+    restart: unless-stopped
+
+# 데이터 영속성을 위한 볼륨 정의 (컨테이너가 삭제되어도 데이터 유지)
+volumes:
+  h2-data:  # H2 데이터베이스 파일들이 저장될 볼륨
+
+# 컨테이너들 간의 통신을 위한 네트워크 정의
+networks:
+  short-url-network:
+    driver: bridge  # 기본 브리지 네트워크 드라이버 사용 (컨테이너 간 통신 가능) 
