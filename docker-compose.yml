@@ -2,14 +2,14 @@
 services:
   # H2 Database Container - 데이터베이스 역할
   h2-db:
-    # Docker Hub에서 가져올 H2 데이터베이스 이미지 (미리 빌드된 이미지)
-    image: buildo/h2database:latest
+    # 더 안정적인 H2 이미지 사용
+    image: nemerosa/h2
     # 컨테이너에 고유한 이름 부여 (다른 컨테이너가 이 이름으로 접근 가능)
     container_name: short-url-h2-db
     # 호스트 포트:컨테이너 포트 매핑
     ports:
       - "8082:8082"  # H2 웹 콘솔 접근용 (브라우저에서 localhost:8082로 접속)
-      - "9092:9092"  # H2 TCP 서버 포트 (Spring Boot가 데이터베이스에 연결할 때 사용)
+      - "9082:9082"  # H2 TCP 서버 포트 (Spring Boot가 데이터베이스에 연결할 때 사용)
     # 컨테이너 내부에서 사용할 환경변수 설정
     environment:
       # H2 데이터베이스 실행 옵션: 웹콘솔 활성화, 외부접속 허용, TCP 서버 활성화
