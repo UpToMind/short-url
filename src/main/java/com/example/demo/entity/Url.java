@@ -14,14 +14,17 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class Url {
     
+    /**
+     * Snowflake ID를 Primary Key로 사용
+     * auto-increment 대신 Snowflake 알고리즘으로 생성되는 고유 ID
+     */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
     @Column(nullable = false, length = 2000)
     private String originalUrl;
     
-    @Column(nullable = false, unique = true, length = 10)
+    @Column(nullable = false, unique = true, length = 7)
     private String shortCode;
     
     @Column(nullable = false)
@@ -36,5 +39,19 @@ public class Url {
         if (clickCount == null) {
             clickCount = 0L;
         }
+    }
+    
+    /**
+     * Snowflake ID 기반 Primary Key 설정
+     */
+    public void setSnowflakeId(Long snowflakeId) {
+        this.id = snowflakeId;
+    }
+    
+    /**
+     * Snowflake ID 조회 (id와 동일)
+     */
+    public Long getSnowflakeId() {
+        return this.id;
     }
 } 

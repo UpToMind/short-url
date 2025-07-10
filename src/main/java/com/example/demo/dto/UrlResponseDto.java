@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UrlResponseDto {
     
-    private Long id;
+    private Long id;  // Snowflake ID가 Primary Key
     private String originalUrl;
     private String shortCode;
     private String shortUrl;
@@ -21,7 +21,7 @@ public class UrlResponseDto {
     
     public static UrlResponseDto from(Url url, String baseUrl) {
         return new UrlResponseDto(
-            url.getId(),
+            url.getId(),  // Snowflake ID
             url.getOriginalUrl(),
             url.getShortCode(),
             baseUrl + "/" + url.getShortCode(),
