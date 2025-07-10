@@ -4,12 +4,13 @@ import com.example.demo.dto.UrlRequestDto;
 import com.example.demo.dto.UrlResponseDto;
 import com.example.demo.entity.Url;
 import com.example.demo.repository.UrlRepository;
+import com.example.demo.util.SnowflakeIdGenerator;
+import com.example.demo.util.Base62Encoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,8 +21,8 @@ import java.util.stream.Collectors;
 public class UrlService {
     
     private final UrlRepository urlRepository;
-    private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    private static final int SHORT_CODE_LENGTH = 6;
+    private final SnowflakeIdGenerator snowflakeIdGenerator;
+    private final Base62Encoder base62Encoder;
     private static final String BASE_URL = "http://localhost:8080";
     
     /**
@@ -33,18 +34,30 @@ public class UrlService {
         // 이미 단축된 URL이 있는지 확인
         return urlRepository.findByOriginalUrl(originalUrl)
             .map(existingUrl -> {
-                log.info("기존 단축 URL 반환: {}", existingUrl.getShortCode());
+                log.info("기존 단축 URL 반환: {} (Snowflake ID: {})", 
+                        existingUrl.getShortCode(), existingUrl.getId());
                 return UrlResponseDto.from(existingUrl, BASE_URL);
             })
             .orElseGet(() -> {
                 // 새로운 단축 URL 생성
-                String shortCode = generateUniqueShortCode();
+                long snowflakeId = snowflakeIdGenerator.nextId();
+                String shortCode = base62Encoder.generateShortCode(snowflakeId);
+                
+                // 중복 검사 (매우 낮은 확률이지만 안전장치)
+                while (urlRepository.existsByShortCode(shortCode) || urlRepository.existsById(snowflakeId)) {
+                    log.warn("⚠️ shortCode 또는 Snowflake ID 중복 발생 (매우 드문 경우): shortCode={}, snowflakeId={}", shortCode, snowflakeId);
+                    snowflakeId = snowflakeIdGenerator.nextId();
+                    shortCode = base62Encoder.generateShortCode(snowflakeId);
+                }
+                
                 Url url = new Url();
+                url.setId(snowflakeId);  // Snowflake ID를 직접 Primary Key로 설정
                 url.setOriginalUrl(originalUrl);
                 url.setShortCode(shortCode);
                 
                 Url savedUrl = urlRepository.save(url);
-                log.info("새로운 단축 URL 생성: {} -> {}", originalUrl, shortCode);
+                log.info("새로운 단축 URL 생성: {} -> {} (Snowflake ID: {})", 
+                        originalUrl, shortCode, snowflakeId);
                 
                 return UrlResponseDto.from(savedUrl, BASE_URL);
             });
@@ -61,7 +74,8 @@ public class UrlService {
         url.setClickCount(url.getClickCount() + 1);
         urlRepository.save(url);
         
-        log.info("단축 URL 접근: {} -> {} (클릭 수: {})", shortCode, url.getOriginalUrl(), url.getClickCount());
+        log.info("단축 URL 접근: {} -> {} (클릭 수: {}, Snowflake ID: {})", 
+                shortCode, url.getOriginalUrl(), url.getClickCount(), url.getId());
         
         return url.getOriginalUrl();
     }
@@ -88,20 +102,27 @@ public class UrlService {
     }
     
     /**
-     * 고유한 단축 코드 생성
+     * Snowflake ID로 URL 조회 (디버깅/관리용)
      */
-    private String generateUniqueShortCode() {
-        SecureRandom random = new SecureRandom();
-        String shortCode;
+    @Transactional(readOnly = true)
+    public UrlResponseDto getUrlBySnowflakeId(Long snowflakeId) {
+        Url url = urlRepository.findById(snowflakeId)
+            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 Snowflake ID입니다: " + snowflakeId));
         
-        do {
-            StringBuilder sb = new StringBuilder(SHORT_CODE_LENGTH);
-            for (int i = 0; i < SHORT_CODE_LENGTH; i++) {
-                sb.append(CHARACTERS.charAt(random.nextInt(CHARACTERS.length())));
-            }
-            shortCode = sb.toString();
-        } while (urlRepository.existsByShortCode(shortCode));
-        
-        return shortCode;
+        return UrlResponseDto.from(url, BASE_URL);
+    }
+    
+    /**
+     * Snowflake ID 정보 파싱 (디버깅용)
+     */
+    public SnowflakeIdGenerator.IdInfo parseSnowflakeId(Long snowflakeId) {
+        return snowflakeIdGenerator.parseId(snowflakeId);
+    }
+    
+    /**
+     * Base62 인코딩/디코딩 테스트 (개발용)
+     */
+    public void testBase62Encoding() {
+        base62Encoder.testEncodeDecode();
     }
 } 
