@@ -242,6 +242,40 @@ public class PerformanceTestController {
     }
     
     /**
+     * shortCode 응답 속도 정밀 측정 (Redis 비교용)
+     */
+    @PostMapping("/response-time")
+    public ResponseEntity<?> measureResponseTime(@RequestParam(defaultValue = "1000") int testCount) {
+        try {
+            log.info("📊 shortCode 응답 속도 측정 API 호출 - {} 회", testCount);
+            
+            Map<String, Object> results = performanceTestService.performShortCodeResponseTimeTest(testCount);
+            
+            if (results.containsKey("error")) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "테스트 실행 실패",
+                    "error", results.get("error")
+                ));
+            }
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "shortCode 응답 속도 측정 완료",
+                "results", results
+            ));
+            
+        } catch (Exception e) {
+            log.error("shortCode 응답 속도 측정 중 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "shortCode 응답 속도 측정 실패",
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
      * 데이터베이스 현황 조회
      */
     @GetMapping("/status")
@@ -361,6 +395,35 @@ public class PerformanceTestController {
     }
     
     /**
+     * 중복 Snowflake ID 검사
+     * 예: GET /api/performance/check-duplicate-snowflake-ids
+     */
+    @GetMapping("/check-duplicate-snowflake-ids")
+    public ResponseEntity<Map<String, Object>> checkDuplicateIds() {
+        log.info("🔍 중복 Snowflake ID 검사 요청");
+        
+        try {
+            long startTime = System.currentTimeMillis();
+            performanceTestService.findDuplicateSnowflakeIds();
+            long endTime = System.currentTimeMillis();
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "중복 Snowflake ID 검사가 완료되었습니다.",
+                "executionTimeMs", endTime - startTime,
+                "note", "상세한 결과는 서버 로그를 확인하세요."
+            ));
+            
+        } catch (Exception e) {
+            log.error("중복 Snowflake ID 검사 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "중복 Snowflake ID 검사 중 오류가 발생했습니다: " + e.getMessage()
+            ));
+        }
+    }
+    
+    /**
      * 전체 중복 검사 실행 (URL + shortCode)
      * 예: GET /api/performance/check-all-duplicates
      */
@@ -377,7 +440,7 @@ public class PerformanceTestController {
                 "success", true,
                 "message", "전체 중복 검사가 완료되었습니다.",
                 "executionTimeMs", endTime - startTime,
-                "checkedItems", new String[]{"데이터베이스 현황", "중복 original URL", "중복 shortCode"},
+                "checkedItems", new String[]{"데이터베이스 현황", "중복 original URL", "중복 shortCode", "중복 Snowflake ID"},
                 "note", "상세한 결과는 서버 로그를 확인하세요."
             ));
             

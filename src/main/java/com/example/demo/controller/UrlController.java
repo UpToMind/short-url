@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.dto.UrlRequestDto;
 import com.example.demo.dto.UrlResponseDto;
 import com.example.demo.service.UrlService;
+import com.example.demo.util.SnowflakeIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -96,10 +98,66 @@ public class UrlController {
     }
     
     /**
+     * Snowflake ID로 URL 조회 (디버깅/관리용)
+     */
+    @GetMapping("/api/urls/snowflake/{snowflakeId}")
+    public ResponseEntity<UrlResponseDto> getUrlBySnowflakeId(@PathVariable Long snowflakeId) {
+        try {
+            UrlResponseDto response = urlService.getUrlBySnowflakeId(snowflakeId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("존재하지 않는 Snowflake ID 요청: {}", snowflakeId);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("Snowflake ID로 URL 조회 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Snowflake ID 정보 파싱 (디버깅용)
+     */
+    @GetMapping("/api/snowflake/parse/{snowflakeId}")
+    public ResponseEntity<Map<String, Object>> parseSnowflakeId(@PathVariable Long snowflakeId) {
+        try {
+            SnowflakeIdGenerator.IdInfo idInfo = urlService.parseSnowflakeId(snowflakeId);
+            
+            Map<String, Object> result = Map.of(
+                "snowflakeId", snowflakeId,
+                "timestamp", idInfo.getTimestamp(),
+                "timestampFormatted", new java.util.Date(idInfo.getTimestamp()).toString(),
+                "datacenterId", idInfo.getDatacenterId(),
+                "workerId", idInfo.getWorkerId(),
+                "sequence", idInfo.getSequence(),
+                "info", idInfo.toString()
+            );
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Snowflake ID 파싱 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
+     * Base62 인코딩/디코딩 테스트 (개발용)
+     */
+    @GetMapping("/api/test/base62")
+    public ResponseEntity<String> testBase62Encoding() {
+        try {
+            urlService.testBase62Encoding();
+            return ResponseEntity.ok("Base62 인코딩/디코딩 테스트가 완료되었습니다. 서버 로그를 확인하세요.");
+        } catch (Exception e) {
+            log.error("Base62 테스트 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
      * 헬스 체크
      */
     @GetMapping("/api/health")
     public ResponseEntity<String> health() {
-        return ResponseEntity.ok("URL 단축기 서비스가 정상적으로 동작 중입니다!");
+        return ResponseEntity.ok("Snowflake ID 기반 URL 단축기 서비스가 정상적으로 동작 중입니다!");
     }
 } 
