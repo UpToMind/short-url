@@ -31,7 +31,7 @@ services:
     container_name: short-url-app
     # Spring Boot 애플리케이션 포트 매핑 (웹 서버 접근용)
     ports:
-      - "8080:8080"  # localhost:8080으로 애플리케이션 접속 가능
+      - "8080:8080"
     # Spring Boot 프로필 설정 (Docker 환경용 설정 파일 사용)
     environment:
       - SPRING_PROFILES_ACTIVE=docker  # application-docker.properties 사용
@@ -41,7 +41,6 @@ services:
     # 데이터베이스와 통신하기 위해 같은 네트워크에 속함
     networks:
       - short-url-network
-    # 장애 시 자동 재시작 설정
     restart: unless-stopped
 
 # 데이터 영속성을 위한 볼륨 정의 (컨테이너가 삭제되어도 데이터 유지)
