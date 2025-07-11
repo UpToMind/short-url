@@ -160,4 +160,119 @@ public class UrlController {
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Snowflake ID 기반 URL 단축기 서비스가 정상적으로 동작 중입니다!");
     }
+
+    /**
+     * 단축 URL 삭제 (데이터 불일치 문제 재현용)
+     */
+    @DeleteMapping("/api/urls/{shortCode}")
+    public ResponseEntity<Map<String, Object>> deleteUrl(@PathVariable String shortCode) {
+        try {
+            boolean deleted = urlService.deleteUrl(shortCode);
+            if (deleted) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "URL이 삭제되었습니다 (캐시는 그대로 둠 - 데이터 불일치 상황 생성)",
+                    "shortCode", shortCode,
+                    "warning", "이제 캐시와 DB 간 데이터 불일치 상황이 발생했습니다!"
+                ));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            log.error("URL 삭제 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+    
+    /**
+     * 단축 URL 올바른 삭제 (캐시도 함께 삭제)
+     */
+    @DeleteMapping("/api/urls/{shortCode}/properly")
+    public ResponseEntity<Map<String, Object>> deleteUrlProperly(@PathVariable String shortCode) {
+        try {
+            boolean deleted = urlService.deleteUrlProperly(shortCode);
+            if (deleted) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "URL이 올바르게 삭제되었습니다 (Redis Pub/Sub으로 캐시 무효화)",
+                    "shortCode", shortCode
+                ));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            log.error("URL 올바른 삭제 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+    
+    /**
+     * 만료된 URL 시뮬레이션 (데이터 불일치 문제 재현용)
+     */
+    @PostMapping("/api/urls/{shortCode}/expire")
+    public ResponseEntity<Map<String, Object>> simulateExpiredUrl(@PathVariable String shortCode) {
+        log.info("⏰ URL 만료 시뮬레이션 API 호출: {}", shortCode);
+        boolean expired = urlService.simulateExpiredUrl(shortCode);
+        if (expired) {
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "URL 만료 시뮬레이션 완료 (캐시는 그대로 둠 - 데이터 불일치 상황 생성)",
+                "shortCode", shortCode,
+                "warning", "이제 캐시와 DB 간 데이터 불일치 상황이 발생했습니다!"
+            ));
+        }
+        return ResponseEntity.notFound().build();
+    }
+    
+    /**
+     * URL 만료 처리 (올바른 방법)
+     */
+    @PostMapping("/api/urls/{shortCode}/expire-properly")
+    public ResponseEntity<Map<String, Object>> expireUrlProperly(@PathVariable String shortCode) {
+        log.info("⏰ URL 올바른 만료 처리 API 호출: {}", shortCode);
+        boolean expired = urlService.expireUrl(shortCode);
+        if (expired) {
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "URL이 올바르게 만료 처리되었습니다 (Redis Pub/Sub으로 캐시 무효화)",
+                "shortCode", shortCode
+            ));
+        }
+        return ResponseEntity.notFound().build();
+    }
+    
+    /**
+     * 만료된 URL 정리 (배치 작업)
+     */
+    @PostMapping("/api/urls/cleanup-expired")
+    public ResponseEntity<Map<String, Object>> cleanupExpiredUrls() {
+        log.info("🧹 만료된 URL 정리 API 호출");
+        urlService.cleanupExpiredUrls();
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "만료된 URL 정리 작업이 완료되었습니다"
+        ));
+    }
+    
+    /**
+     * 캐시와 DB 데이터 일치성 검증
+     */
+    @GetMapping("/api/urls/{shortCode}/validate")
+    public ResponseEntity<Map<String, Object>> validateCacheConsistency(@PathVariable String shortCode) {
+        try {
+            boolean isConsistent = urlService.validateCacheConsistency(shortCode);
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "shortCode", shortCode,
+                "isConsistent", isConsistent,
+                "message", isConsistent ? "캐시와 DB 데이터가 일치합니다" : "캐시와 DB 데이터가 불일치합니다!"
+            ));
+        } catch (Exception e) {
+            log.error("일치성 검증 중 오류 발생: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
 } 
