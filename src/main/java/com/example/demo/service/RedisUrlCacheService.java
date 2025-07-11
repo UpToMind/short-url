@@ -3,9 +3,14 @@ package com.example.demo.service;
 import com.example.demo.entity.Url;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.Message;
+import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Map;
@@ -17,15 +22,89 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class RedisUrlCacheService {
+public class RedisUrlCacheService implements MessageListener {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisMessageListenerContainer redisMessageListenerContainer;
     
     // 캐시 키 접두사
     private static final String CACHE_KEY_PREFIX = "url:";
     
     // 캐시 TTL (Time To Live) - 1시간
     private static final Duration CACHE_TTL = Duration.ofHours(1);
+    
+    // Pub/Sub 채널 이름
+    private static final String CACHE_EVICTION_CHANNEL = "url:cache:eviction";
+    private final ChannelTopic cacheEvictionTopic = new ChannelTopic(CACHE_EVICTION_CHANNEL);
+
+    /**
+     * Pub/Sub 메시지 리스너 초기화
+     */
+    @PostConstruct
+    public void initMessageListener() {
+        try {
+            redisMessageListenerContainer.addMessageListener(this, cacheEvictionTopic);
+            log.info("✅ Redis Pub/Sub 메시지 리스너 초기화 완료: 채널 = {}", CACHE_EVICTION_CHANNEL);
+        } catch (Exception e) {
+            log.error("❌ Redis Pub/Sub 메시지 리스너 초기화 실패: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 메시지 수신 처리 (MessageListener 인터페이스 구현)
+     */
+    @Override
+    public void onMessage(Message message, byte[] pattern) {
+        try {
+            String shortCode = new String(message.getBody()).replaceAll("\"", "");
+            log.info("📨 캐시 무효화 메시지 수신: shortCode={}", shortCode);
+            
+            // 로컬 캐시에서 해당 URL 삭제
+            String cacheKey = CACHE_KEY_PREFIX + shortCode;
+            Boolean deleted = redisTemplate.delete(cacheKey);
+            
+            if (Boolean.TRUE.equals(deleted)) {
+                log.info("✅ Pub/Sub 캐시 무효화 완료: shortCode={}", shortCode);
+            } else {
+                log.warn("⚠️ Pub/Sub 캐시 무효화 - 키가 존재하지 않음: shortCode={}", shortCode);
+            }
+        } catch (Exception e) {
+            log.error("❌ 캐시 무효화 메시지 처리 실패: error={}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 캐시 무효화 메시지 발행
+     */
+    public void publishCacheEviction(String shortCode) {
+        try {
+            redisTemplate.convertAndSend(CACHE_EVICTION_CHANNEL, shortCode);
+            log.info("📢 캐시 무효화 메시지 발행: shortCode={}, 채널={}", shortCode, CACHE_EVICTION_CHANNEL);
+        } catch (Exception e) {
+            log.error("❌ 캐시 무효화 메시지 발행 실패: shortCode={}, error={}", shortCode, e.getMessage());
+        }
+    }
+
+    /**
+     * 캐시 무효화 메시지 처리 (이전 메서드는 호환성을 위해 유지)
+     */
+    public void handleCacheEvictionMessage(String shortCode) {
+        try {
+            log.info("📨 캐시 무효화 메시지 수신: shortCode={}", shortCode);
+            
+            // 로컬 캐시에서 해당 URL 삭제
+            String cacheKey = CACHE_KEY_PREFIX + shortCode;
+            Boolean deleted = redisTemplate.delete(cacheKey);
+            
+            if (Boolean.TRUE.equals(deleted)) {
+                log.info("✅ Pub/Sub 캐시 무효화 완료: shortCode={}", shortCode);
+            } else {
+                log.warn("⚠️ Pub/Sub 캐시 무효화 - 키가 존재하지 않음: shortCode={}", shortCode);
+            }
+        } catch (Exception e) {
+            log.error("❌ 캐시 무효화 메시지 처리 실패: shortCode={}, error={}", shortCode, e.getMessage());
+        }
+    }
 
     /**
      * shortCode로 URL 캐시에서 조회
