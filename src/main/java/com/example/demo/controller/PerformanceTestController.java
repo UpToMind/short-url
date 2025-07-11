@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import com.example.demo.service.RedisUrlCacheService;
 
 @RestController
 @RequestMapping("/api/performance")
@@ -16,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 public class PerformanceTestController {
     
     private final PerformanceTestService performanceTestService;
+    private final RedisUrlCacheService redisUrlCacheService;
     
     /**
      * 대량 데이터 삽입 (1000만 개 기본) - 병렬 처리
@@ -249,7 +251,7 @@ public class PerformanceTestController {
         try {
             log.info("📊 shortCode 응답 속도 측정 API 호출 - {} 회", testCount);
             
-            Map<String, Object> results = performanceTestService.performShortCodeResponseTimeTest(testCount);
+            Map<String, Object> results = performanceTestService.measureRedirectResponseTime(testCount);
             
             if (results.containsKey("error")) {
                 return ResponseEntity.badRequest().body(Map.of(
@@ -275,6 +277,141 @@ public class PerformanceTestController {
         }
     }
     
+    /**
+     * 실제 리디렉션 응답 속도 측정 (End-to-End 성능)
+     * Redis 비교를 위한 실제 서비스 시나리오 테스트
+     */
+    @PostMapping("/redirect-response-time")
+    public ResponseEntity<?> measureRedirectResponseTime(@RequestParam(defaultValue = "1000") int testCount) {
+        try {
+            log.info("📊 실제 리디렉션 응답 속도 측정 API 호출 - {} 회 (End-to-End)", testCount);
+            
+            Map<String, Object> results = performanceTestService.measureRedirectResponseTime(testCount);
+            
+            if (results.containsKey("error")) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "테스트 실행 실패",
+                    "error", results.get("error")
+                ));
+            }
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "실제 리디렉션 응답 속도 측정 완료 (End-to-End)",
+                "results", results,
+                "note", "이 결과를 Redis 캐시 적용 후 결과와 비교하세요"
+            ));
+            
+        } catch (Exception e) {
+            log.error("실제 리디렉션 응답 속도 측정 중 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "실제 리디렉션 응답 속도 측정 실패",
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * Redis 캐시 성능 테스트 (DB와 비교)
+     * 예: POST /api/performance/redis-cache-test?testCount=1000
+     */
+    @PostMapping("/redis-cache-test")
+    public ResponseEntity<?> measureRedisCachePerformance(@RequestParam(defaultValue = "1000") int testCount) {
+        try {
+            log.info("🚀 Redis 캐시 성능 테스트 API 호출 - {} 회", testCount);
+            
+            Map<String, Object> results = performanceTestService.measureRedisCachePerformance(testCount);
+            
+            if (results.containsKey("error")) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "테스트 실행 실패",
+                    "error", results.get("error")
+                ));
+            }
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Redis 캐시 성능 테스트 완료",
+                "results", results,
+                "note", "캐시 워밍업 후 Cache Hit/Miss 성능을 DB 직접 조회와 비교했습니다"
+            ));
+            
+        } catch (Exception e) {
+            log.error("Redis 캐시 성능 테스트 중 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "Redis 캐시 성능 테스트 실패",
+                "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Redis 캐시 상태 확인 (디버깅용)
+     * 예: GET /api/performance/redis-cache-status
+     */
+    @GetMapping("/redis-cache-status")
+    public ResponseEntity<?> getRedisCacheStatus() {
+        try {
+            log.info("🔍 Redis 캐시 상태 확인 API 호출");
+            
+            Map<String, Object> cacheInfo = redisUrlCacheService.getCacheInfo();
+            boolean isConnected = redisUrlCacheService.isRedisConnected();
+            long cacheSize = redisUrlCacheService.getCacheSize();
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Redis 캐시 상태 조회 완료",
+                "redis_connected", isConnected,
+                "cache_size", cacheSize,
+                "cache_info", cacheInfo,
+                "timestamp", System.currentTimeMillis()
+            ));
+            
+        } catch (Exception e) {
+            log.error("Redis 캐시 상태 확인 중 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "Redis 캐시 상태 확인 실패",
+                "error", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Redis 캐시 클리어 (디버깅용)
+     * 예: DELETE /api/performance/redis-cache-clear
+     */
+    @DeleteMapping("/redis-cache-clear")
+    public ResponseEntity<?> clearRedisCache() {
+        try {
+            log.info("🧹 Redis 캐시 클리어 API 호출");
+            
+            long beforeSize = redisUrlCacheService.getCacheSize();
+            redisUrlCacheService.clearAllCache();
+            long afterSize = redisUrlCacheService.getCacheSize();
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Redis 캐시 클리어 완료",
+                "before_size", beforeSize,
+                "after_size", afterSize,
+                "cleared_count", beforeSize - afterSize
+            ));
+            
+        } catch (Exception e) {
+            log.error("Redis 캐시 클리어 중 오류: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "message", "Redis 캐시 클리어 실패",
+                "error", e.getMessage()
+            ));
+        }
+    }
+
     /**
      * 데이터베이스 현황 조회
      */
@@ -473,9 +610,14 @@ public class PerformanceTestController {
                     "POST /api/performance/test-batch?batchSize=100&batchCount=10", "배치 조회 성능 테스트",
                     "POST /api/performance/test-full", "전체 성능 테스트"
                 ),
+                "Redis 비교 테스트", Map.of(
+                    "POST /api/performance/redirect-response-time?testCount=1000", "실제 리디렉션 응답 속도 (End-to-End)",
+                    "POST /api/performance/redis-cache-test?testCount=1000", "Redis 캐시 성능 테스트"
+                ),
                 "중복 검사", Map.of(
                     "GET /api/performance/check-duplicate-urls", "중복 original URL 검사",
                     "GET /api/performance/check-duplicate-codes", "중복 shortCode 검사 (무결성)",
+                    "GET /api/performance/check-duplicate-snowflake-ids", "중복 Snowflake ID 검사",
                     "GET /api/performance/check-all-duplicates", "전체 중복 검사"
                 ),
                 "관리", Map.of(
@@ -483,10 +625,23 @@ public class PerformanceTestController {
                     "DELETE /api/performance/clear?confirm=true", "모든 데이터 삭제"
                 )
             ),
+            "redis_comparison", Map.of(
+                "description", "Redis 캐시 적용 전후 성능 비교를 위한 측정 API",
+                "redirect_response_time", "실제 서비스 시나리오 (shortCode → 리디렉션) 전체 처리 시간 측정",
+                "metrics", new String[]{
+                    "평균 응답 시간 (ms)",
+                    "P50, P90, P95, P99 퍼센타일",
+                    "QPS (Queries Per Second)",
+                    "성공률 및 실패율",
+                    "DB 조회 비율 (전체 시간 대비)"
+                }
+            ),
             "notes", new String[]{
                 "대량 삽입은 병렬 처리로 CPU 코어 수의 2배 스레드를 사용합니다.",
                 "진행 상황과 상세 결과는 서버 로그에서 확인할 수 있습니다.",
-                "중복 검사는 SQL 집계 쿼리를 사용하여 효율적으로 처리됩니다."
+                "중복 검사는 SQL 집계 쿼리를 사용하여 효율적으로 처리됩니다.",
+                "Redis 비교 테스트는 캐시 적용 전후 성능 측정을 위해 설계되었습니다.",
+                "redirect-response-time은 실제 서비스 시나리오에 가장 가까운 측정입니다."
             }
         ));
     }
