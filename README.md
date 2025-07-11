@@ -294,12 +294,6 @@ curl http://localhost:8080/api/urls/{shortCode}/validate
 
 ## 🚨 중요 주의사항
 
-### 🔒 운영 환경
-1. **절대 데이터 불일치 상황을 의도적으로 만들지 마세요**
-2. **항상 Pub/Sub 기반 캐시 무효화를 사용하세요**
-3. **정기적인 캐시-DB 일치성 검증을 수행하세요**
-4. **Redis 연결 상태를 지속적으로 모니터링하세요**
-
 ### 🧪 개발/테스트 환경
 1. **문제 재현용 API는 교육 목적으로만 사용하세요**
 2. **테스트 후에는 캐시를 정리하세요**
@@ -322,16 +316,6 @@ curl http://localhost:8080/api/urls/{shortCode}/validate
 - **Fallback 메커니즘**: 캐시 실패 시 대체 로직
 - **Health Check**: 시스템 상태 실시간 확인
 
-## 📚 관련 기술 블로그
-
-프로젝트에서 해결한 문제와 구현 과정을 상세히 다룬 기술 블로그를 확인해보세요:
-
-- 📖 **[tech_blog_redis_pubsub_cache_solution.md](./tech_blog_redis_pubsub_cache_solution.md)**
-
 ## 📄 라이선스
 
 MIT License
-
----
-
-**🚀 이 프로젝트는 Redis Pub/Sub를 활용한 분산 캐시 무효화의 실제 구현 사례를 제공합니다. 실무에서 바로 적용 가능한 완전한 솔루션입니다!** 
