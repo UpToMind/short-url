@@ -32,6 +32,9 @@ public class Url {
     
     @Column(nullable = false, columnDefinition = "bigint default 0")
     private Long clickCount;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
     
     @PrePersist
     protected void onCreate() {
@@ -53,5 +56,19 @@ public class Url {
      */
     public Long getSnowflakeId() {
         return this.id;
+    }
+
+    /**
+     * URL이 만료되었는지 확인
+     */
+    public boolean isExpired() {
+        return expiresAt != null && LocalDateTime.now().isAfter(expiresAt);
+    }
+
+    /**
+     * URL이 유효한지 확인 (만료되지 않음)
+     */
+    public boolean isValid() {
+        return !isExpired();
     }
 } 
