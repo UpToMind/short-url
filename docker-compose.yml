@@ -23,6 +23,25 @@ services:
     # 컨테이너 재시작 정책 (Docker 데몬 재시작 시 자동으로 컨테이너도 재시작)
     restart: unless-stopped
 
+  # Redis Cache Container - 캐시 역할
+  redis:
+    # 공식 Redis 이미지 사용 (최신 안정 버전)
+    image: redis:7-alpine
+    # Redis 컨테이너 이름
+    container_name: short-url-redis
+    # Redis 포트 매핑
+    ports:
+      - "6379:6379"  # Redis 기본 포트
+    # Redis 설정 명령어
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # 데이터 영속성을 위한 볼륨 마운트
+    volumes:
+      - redis-data:/data
+    # 네트워크 설정
+    networks:
+      - short-url-network
+    restart: unless-stopped
+
   # Spring Boot Application - 웹 애플리케이션 역할
   short-url-app:
     # 현재 디렉토리의 Dockerfile을 사용하여 이미지 빌드
@@ -35,10 +54,11 @@ services:
     # Spring Boot 프로필 설정 (Docker 환경용 설정 파일 사용)
     environment:
       - SPRING_PROFILES_ACTIVE=docker  # application-docker.properties 사용
-    # 컨테이너 시작 순서 제어 (h2-db가 먼저 시작된 후 이 컨테이너 시작)
+    # 컨테이너 시작 순서 제어 (h2-db와 redis가 먼저 시작된 후 이 컨테이너 시작)
     depends_on:
       - h2-db
-    # 데이터베이스와 통신하기 위해 같은 네트워크에 속함
+      - redis
+    # 데이터베이스와 Redis와 통신하기 위해 같은 네트워크에 속함
     networks:
       - short-url-network
     restart: unless-stopped
@@ -46,6 +66,7 @@ services:
 # 데이터 영속성을 위한 볼륨 정의 (컨테이너가 삭제되어도 데이터 유지)
 volumes:
   h2-data:  # H2 데이터베이스 파일들이 저장될 볼륨
+  redis-data:  # Redis 데이터 파일들이 저장될 볼륨
 
 # 컨테이너들 간의 통신을 위한 네트워크 정의
 networks:
